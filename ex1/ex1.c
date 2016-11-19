@@ -14,10 +14,16 @@
 //stackoverflow claims that 131072 = 2**17 is optimal for read
 
 
+//todo:
+//1. check if there are multiple files
+//2. check key related erros
+//3. check 1gb files /key
+//4. if the key is longer than the file? 
+
 /*the function writes into target_buffer the xor values of the key and the encrypted/decrypted file
 the number fo bytes to write is determined before calling it and is passed as num_of_bytes
  */
-int xor_with_key(char* file_buffer, char* key_buffer, char* target_buffer, int num_of_bytes) {
+void xor_with_key(char* file_buffer, char* key_buffer, char* target_buffer, int num_of_bytes) {
   int i =0;
   for (i=0; i<num_of_bytes; i++) {
     target_buffer[i] = file_buffer[i]^key_buffer[i]; 
@@ -127,7 +133,6 @@ int decrypt_file(int read_file_fd, int key_fd, int write_file_fd) {
 int main(int argc, char* argv[]){
   char* input_dir_path = NULL;
   char* output_dir_path = NULL;
-  char* key_path = NULL; 
   DIR* input_files_dir = NULL;
   DIR* output_files_dir = NULL; 
   struct dirent* read_dir = NULL; 
@@ -137,7 +142,6 @@ int main(int argc, char* argv[]){
   int curr_output_fd = 0;
   int output_dir_fd = 0; 
   int key_fd =0;
-  char buffer[1024] = {0};
   int decrpyt_success = 0; 
 
 
