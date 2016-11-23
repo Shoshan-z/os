@@ -219,6 +219,9 @@ int main(int argc, char* argv[]){
   }
 
   close(key_fd);
+  closedir(input_files_dir); 
+  closedir(output_files_dir);  
+    
   return 0; 
 
 }
