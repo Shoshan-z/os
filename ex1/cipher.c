@@ -13,13 +13,6 @@
 #define BYTES_TO_WRITE 131072
 //stackoverflow claims that 131072 = 2**17 is optimal for read
 
-
-//todo:
-//1. check if there are multiple files
-//2. check key related erros
-//3. check 1gb files /key
-//4. if the key is longer than the file? 
-
 /*the function writes into target_buffer the xor values of the key and the encrypted/decrypted file
 the number fo bytes to write is determined before calling it and is passed as num_of_bytes
  */
@@ -96,7 +89,7 @@ int decrypt_file(int read_file_fd, int key_fd, int write_file_fd) {
   if (seek_success <0) {
     printf("Error seeking in key file: %s\n", strerror(errno));
     return -1; 
-  }
+  }n
   
   bytes_read = read(read_file_fd, file_buffer, BYTES_TO_READ); 
   if (bytes_read < 0) {
