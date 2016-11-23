@@ -89,7 +89,7 @@ int decrypt_file(int read_file_fd, int key_fd, int write_file_fd) {
   if (seek_success <0) {
     printf("Error seeking in key file: %s\n", strerror(errno));
     return -1; 
-  }n
+  }
   
   bytes_read = read(read_file_fd, file_buffer, BYTES_TO_READ); 
   if (bytes_read < 0) {
