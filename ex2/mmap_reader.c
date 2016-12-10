@@ -14,6 +14,13 @@
 #define FILE_PATH "/tmp/mmapped.bin"
 
 
+/*gloabl variables: the sigterm sigaction structs are global so I'll be able
+to register the in the main but restore them in the SIGUSR1 signal handler
+ */
+struct sigaction sigterm_action;
+struct sigaction old_sigterm_action;
+
+//signal handler for SIGUSR1
 void signal_handler(int signum) {
   int fd = -1; 
   int file_size = 0; 
@@ -68,7 +75,7 @@ void signal_handler(int signum) {
     goto cleanup;  
   }
   
-  // Counting time elapsed
+  // counting time elapsed
   elapsed_microsec = (t2.tv_sec - t1.tv_sec) * 1000.0;
   elapsed_microsec += (t2.tv_usec - t1.tv_usec) / 1000.0;
 
@@ -77,6 +84,12 @@ void signal_handler(int signum) {
   //if we got here, no error occured
   ret_val = 0; 
  cleanup: 
+
+  //restore the SIGTERM signal handler
+  if (sigaction (SIGTERM, &old_sigterm_action, NULL) != 0 ){
+    printf("signal handle registration failed: %s\n",strerror(errno));
+  }
+ 
   //close the file
   if (fd >= 0) {
     close(fd);
@@ -95,16 +108,23 @@ void signal_handler(int signum) {
 
 
 int main() {
-  struct sigaction act;
+  struct sigaction sigusr_action;
 
   //assign pointer to the handler function
-  act.sa_handler = signal_handler;
-
+  sigusr_action.sa_handler = signal_handler;
+  sigterm_action.sa_handler = SIG_IGN;
+  
   //remove any special flag
-  act.sa_flags = 0;
+  sigusr_action.sa_flags = 0;
+  sigterm_action.sa_flags = 0;
+  
+  //register the handlers
+  if (sigaction (SIGUSR1, &sigusr_action, NULL) != 0 ){
+    printf("signal handle registration failed: %s\n",strerror(errno));
+    return -1;
+  }
 
-  //register the handler
-  if (sigaction (SIGUSR1, &act, NULL) != 0 ){
+  if (sigaction (SIGTERM, &sigterm_action, &old_sigterm_action) != 0 ){
     printf("signal handle registration failed: %s\n",strerror(errno));
     return -1;
   }

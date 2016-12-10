@@ -23,9 +23,24 @@ int main(int arcg, char* argv[]) {
   int i = 0; 
   struct timeval t1, t2;
   double elapsed_microsec;
-  int ret_val = -1; 
+  int ret_val = -1;
+  struct sigaction sigterm_action; 
+  struct sigaction old_sigterm_action;
+
+
+  //assign pointer to our handler functions
+  sigterm_action.sa_handler = SIG_IGN;
+
+  //remove any special flag
+  sigterm_action.sa_flags = 0;
+
+  //register the signal handler
+  if (sigaction (SIGTERM, &sigterm_action, &old_sigterm_action) != 0) {
+    printf("signal handle registration failed %s\n",strerror(errno));
+    goto cleanup;
+  }
   
-  //open the file for writing //
+  //open the file for writing 
   fd = open(FILE_PATH, O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
   if (fd < 0 ){
       printf( "error opening %s: %s\n", FILE_PATH, strerror(errno));
@@ -39,7 +54,7 @@ int main(int arcg, char* argv[]) {
    }
 
 
-  // Force the file to be of the same size as the (mmapped) array
+  // force the file to be of the same size as the (mmapped) array
   success = lseek(fd, FILESIZE-1, SEEK_SET);
   if (success == -1) {
     printf("error calling lseek() to 'stretch' the file: %s\n", strerror(errno));
@@ -47,7 +62,7 @@ int main(int arcg, char* argv[]) {
   }
 
   
-  // Something has to be written at the end of the file,
+  // something has to be written at the end of the file,
   // so the file actually has the new size. 
   success = write(fd, "", 1);
   if (success != 1) {
@@ -105,10 +120,16 @@ int main(int arcg, char* argv[]) {
   //if we got here, no error occured - return 0 
   ret_val = 0; 
 
- cleanup: 
+ cleanup:
+
+  //restore the signal handler
+  if (sigaction (SIGTERM, &old_sigterm_action, NULL) != 0) {
+    printf("failed restoring the SIGTERM signal handler: %s\n",strerror(errno));
+  }
+
+  // close the file
   if (fd >= 0) {
-     // close the file
-    close(fd);
+      close(fd);
   } 
  
   return ret_val; 

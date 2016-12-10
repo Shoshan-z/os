@@ -26,7 +26,20 @@ int main(){
   char* path = FILE_PATH;
   int i =0; 
   int ret_val = 0; 
-  
+  struct sigaction sigint_action; 
+  struct sigaction old_sigint_action;
+
+  //assign pointer to our handler functions
+  sigint_action.sa_handler = SIG_IGN; 
+
+  //remove any special flag
+  sigint_action.sa_flags = 0;
+
+  if (sigaction (SIGINT, &sigint_action, &old_sigint_action) != 0) {
+    printf("signal handle registration failed %s\n",strerror(errno));
+    goto cleanup;
+  }
+
   sleep(2);
   
   fd = open(path, O_RDONLY);
@@ -52,6 +65,9 @@ int main(){
 
     //count the 'a' chars
     for (i=0; i<bytes_read; i++){
+
+      if (total > 2000) exit(-1); 
+
       if (buffer[i] == 'a') {
 	total++; 
       }
@@ -77,6 +93,10 @@ int main(){
   ret_val = 0; 
   
  cleanup:
+  if (sigaction (SIGINT, &old_sigint_action, NULL) != 0) {
+    printf("failed restoring the SIGINT signal handler: %s\n",strerror(errno));
+  }
+  
   if (fd >= 0) {
     close(fd);
   }
