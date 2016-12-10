@@ -15,37 +15,38 @@
 
 
 void signal_handler(int signum) {
-  int fd = 0;
+  int fd = -1; 
   int file_size = 0; 
   struct timeval t1, t2;
   double elapsed_microsec;
   char* arr = NULL;
   int i =0;
   int success = 0; 
-
+  int ret_val = -1; 
+  
   fd = open(FILE_PATH, O_RDWR);
   if (fd < 0) {
-    printf( "Error opening %s: %s\n", FILE_PATH, strerror(errno));
-    exit(-1);
+    printf( "error opening %s: %s\n", FILE_PATH, strerror(errno));
+    goto cleanup; 
   }
 
   file_size = lseek(fd, SEEK_SET, SEEK_END);
   if (file_size < 0) {
-    printf("Error using lseek to detemine the file size: %s\n", strerror(errno));
-    exit(-1); 
+    printf("error using lseek to detemine the file size: %s\n", strerror(errno));
+    goto cleanup; 
   }
 
   if (file_size == 0) {
-    printf("The file %s is empty\n", FILE_PATH);
-    exit(-1); 
+    printf("the file %s is empty\n", FILE_PATH);
+    goto cleanup; 
   }
 
 
   //start time measurements
   success = gettimeofday(&t1, NULL);
   if (success == -1) {
-    printf("Error starting time measurements: %s\n", strerror(errno));
-    exit(-1);
+    printf("error starting time measurements: %s\n", strerror(errno));
+    goto cleanup; 
   }
   
   //map the file
@@ -53,8 +54,8 @@ void signal_handler(int signum) {
 		     fd,0);
 
   if (arr == MAP_FAILED) {
-    printf("Error mmapping the file: %s\n", strerror(errno));
-    exit(-1);
+    printf("error mmapping the file: %s\n", strerror(errno));
+    goto cleanup; 
   }
 
   while (arr[i] != '\0') {
@@ -64,7 +65,7 @@ void signal_handler(int signum) {
   success = gettimeofday(&t2, NULL);
   if (success == -1) {
     printf("Error getting time measurements: %s\n", strerror(errno));
-    exit(-1);
+    goto cleanup;  
   }
   
   // Counting time elapsed
@@ -73,14 +74,23 @@ void signal_handler(int signum) {
 
   printf("%d were read in %f microseconds through MMAP\n", i,elapsed_microsec ); 
 
+  //if we got here, no error occured
+  ret_val = 0; 
+ cleanup: 
   //close the file
-  close(fd);
-
+  if (fd >= 0) {
+    close(fd);
+  }
   //delete it
   if (unlink(FILE_PATH) == -1 ) {
-    printf("Error unlink the file%s: %s\n",FILE_PATH, strerror(errno));
+    printf("error unlink the file%s: %s\n",FILE_PATH, strerror(errno));
     exit(-1); 
   }
+
+  if (ret_val < 0) {
+    exit(ret_val); 
+  }
+  
 }
 
 

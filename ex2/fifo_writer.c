@@ -67,28 +67,33 @@ int main(int argc, char* argv[]){
   double elapsed_microsec;
   int success = 0;
   struct stat file_info; 
+  int file_exists = 0; 
+  int ret_val = -1; 
 
   //check if the fifo file exist
   success = stat(path, &file_info);
   if (success < 0 ) {
     if (errno != ENOENT) { //the error doesn't say the file doesn't exist
       printf( "error checking the file status %s: %s\n", path, strerror(errno));
-      return -1;
+      goto cleanup; 
     }
     else { //the file doesn't exist
       //create the fifo file
-      if (mkfifo(path, 0600) == -1 ) {
+      success = mkfifo(path, 0600);
+      if (success == -1) {
 	printf( "error creating fifo %s: %s\n", path, strerror(errno));
-	return -1;
-      }
+	goto cleanup;
+      } 
     }
   }
   else { //the file exists
 
+    file_exists = 1; 
+    
     //change the file permissions
     if (chmod(path, S_IRUSR | S_IWUSR) < 0 ) {
       printf( "error setting file permissions: %s\n", strerror(errno));
-      return -1;
+      goto cleanup; 
    }
 
   }
@@ -98,27 +103,27 @@ int main(int argc, char* argv[]){
   fd = open(path, O_WRONLY);
   if (fd < 0 ) {
     printf( "error opening %s: %s\n", path, strerror(errno));
-    return -1;
+    goto cleanup; 
   }
 
   //start time measurements
   success = gettimeofday(&t1, NULL);
   if (success == -1) {
     printf("error starting time measurements: %s\n", strerror(errno));
-    return -1;
+    goto cleanup; 
   }
 
   success = write_num_chars_to_file(fd,num);
   if (success == -1) {
     printf("error writing %d bytes to file\n", num);
-    return -1; 
+    goto cleanup; 
   } 
 
   //end time measurements
   success = gettimeofday(&t2, NULL);
   if (success == -1) {
     printf("Error getting time measurements: %s\n", strerror(errno));
-    return -1;
+    goto cleanup; 
   }
 
   
@@ -128,11 +133,17 @@ int main(int argc, char* argv[]){
 
   printf("%d were written in %f microseconds through FIFO\n", num,elapsed_microsec); 
 
-  close(fd);
-  if (unlink(path) == -1 ) {
-    printf("error unlink the file%s: %s\n", path, strerror(errno));
-    return -1;  
+  ret_val = 0; 
+ cleanup:
+  if (fd >=0) {
+    close(fd);
   }
 
-  return 0; 
+  if (file_exists) {
+    if (unlink(path) == -1 ) {
+      printf("error unlink the file%s: %s\n", path, strerror(errno));  
+    }
+  }
+
+  return(ret_val); 
 }

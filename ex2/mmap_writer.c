@@ -18,32 +18,32 @@ int main(int arcg, char* argv[]) {
   int FILESIZE = atoi(argv[1]);
   int RPID = atoi(argv[2]);
   char* arr = NULL;
-  int fd = 0;
+  int fd = -1; 
   int success = 0;
   int i = 0; 
   struct timeval t1, t2;
   double elapsed_microsec;
-
+  int ret_val = -1; 
   
   //open the file for writing //
   fd = open(FILE_PATH, O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
   if (fd < 0 ){
-      printf( "Error opening %s: %s\n", FILE_PATH, strerror(errno));
-      return -1;
+      printf( "error opening %s: %s\n", FILE_PATH, strerror(errno));
+      goto cleanup;
    }
 
   //change the file permissions
    if (chmod(FILE_PATH, S_IRUSR | S_IWUSR) < 0 ) {
-     printf( "Error setting file permissions: %s\n", strerror(errno));
-     return -1;
+     printf( "error setting file permissions: %s\n", strerror(errno));
+     goto cleanup;
    }
 
 
   // Force the file to be of the same size as the (mmapped) array
   success = lseek(fd, FILESIZE-1, SEEK_SET);
   if (success == -1) {
-    printf("Error calling lseek() to 'stretch' the file: %s\n", strerror(errno));
-    return -1;
+    printf("error calling lseek() to 'stretch' the file: %s\n", strerror(errno));
+    goto cleanup; 
   }
 
   
@@ -51,8 +51,8 @@ int main(int arcg, char* argv[]) {
   // so the file actually has the new size. 
   success = write(fd, "", 1);
   if (success != 1) {
-    printf("Error writing last byte of the file: %s\n", strerror(errno));
-    return -1;
+    printf("error writing last byte of the file: %s\n", strerror(errno));
+    goto cleanup; 
   }
 
   //map the file
@@ -60,15 +60,15 @@ int main(int arcg, char* argv[]) {
 		     fd,0);
 
   if (arr == MAP_FAILED) {
-    printf("Error mmapping the file: %s\n", strerror(errno));
-    return -1;
+    printf("error mmapping the file: %s\n", strerror(errno));
+    goto cleanup; 
   }
 
   //start time measurements
   success = gettimeofday(&t1, NULL);
   if (success == -1) {
-    printf("Error starting time measurements: %s\n", strerror(errno));
-    return -1;
+    printf("error starting time measurements: %s\n", strerror(errno));
+    goto cleanup; 
   }
 
   //write to the file
@@ -79,14 +79,14 @@ int main(int arcg, char* argv[]) {
   //send a signal to the reader process
   success = kill(RPID, SIGUSR1);
   if (success == -1) {
-    printf("Error sending signal to the reader process: %s\n", strerror(errno));
-    return -1;
+    printf("error sending signal to the reader process: %s\n", strerror(errno));
+    goto cleanup; ;
   }
 
   success = gettimeofday(&t2, NULL);
   if (success == -1) {
-    printf("Error getting time measurements: %s\n", strerror(errno));
-    return -1;
+    printf("error getting time measurements: %s\n", strerror(errno));
+    goto cleanup;
   }
   
   // Counting time elapsed
@@ -98,12 +98,18 @@ int main(int arcg, char* argv[]) {
   
   //unnmap
   if (munmap(arr, FILESIZE) == -1 ) {
-    printf("Error un-mmapping the file: %s\n", strerror(errno));
-    return -1;
+    printf("error un-mmapping the file: %s\n", strerror(errno));
+    goto cleanup;
   }
 
-  // close the file
-  close(fd);
+  //if we got here, no error occured - return 0 
+  ret_val = 0; 
 
-  return 0; 
+ cleanup: 
+  if (fd >= 0) {
+     // close the file
+    close(fd);
+  } 
+ 
+  return ret_val; 
 }
