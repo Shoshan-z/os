@@ -66,12 +66,24 @@ void signal_handler(int signum) {
   }
 
   while (arr[i] != '\0') {
-    i++; 
+    if (i == file_size-1) {
+      printf("error in file %s - no null terminator\n", FILE_PATH); 
+      break; 
+    }
+
+    if (arr[i] == 'a') {
+      i++;
+    }
    }
+
+  //counte the null terminator
+  if (arr[i] == '\0') {
+    i++; 
+  }
   
   success = gettimeofday(&t2, NULL);
   if (success == -1) {
-    printf("Error getting time measurements: %s\n", strerror(errno));
+    printf("error getting time measurements: %s\n", strerror(errno));
     goto cleanup;  
   }
   
@@ -95,7 +107,7 @@ void signal_handler(int signum) {
     close(fd);
   }
   //delete it
-  if (unlink(FILE_PATH) == -1 ) {
+   if (unlink(FILE_PATH) == -1 ) {
     printf("error unlink the file%s: %s\n",FILE_PATH, strerror(errno));
     exit(-1); 
   }

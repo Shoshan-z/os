@@ -87,7 +87,7 @@ int main(int arcg, char* argv[]) {
   }
 
   //write to the file
-  for (i = 0; i < FILESIZE; i++) {
+  for (i = 0; i < FILESIZE-1; i++) {
     arr[i] = 'a';
   }
 
@@ -95,7 +95,7 @@ int main(int arcg, char* argv[]) {
   success = kill(RPID, SIGUSR1);
   if (success == -1) {
     printf("error sending signal to the reader process: %s\n", strerror(errno));
-    goto cleanup; ;
+    goto cleanup;
   }
 
   success = gettimeofday(&t2, NULL);
