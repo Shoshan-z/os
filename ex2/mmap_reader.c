@@ -29,22 +29,27 @@ void signal_handler(int signum) {
   char* arr = NULL;
   int i =0;
   int success = 0; 
-  int ret_val = -1; 
+  int ret_val = EXIT_FAILURE; 
   
   fd = open(FILE_PATH, O_RDWR);
   if (fd < 0) {
     printf( "error opening %s: %s\n", FILE_PATH, strerror(errno));
+    ret_val = errno; 
+    success = -1; 
     goto cleanup; 
   }
 
   file_size = lseek(fd, SEEK_SET, SEEK_END);
   if (file_size < 0) {
     printf("error using lseek to detemine the file size: %s\n", strerror(errno));
+    ret_val = errno;
+    success = -1; 
     goto cleanup; 
   }
 
   if (file_size == 0) {
     printf("the file %s is empty\n", FILE_PATH);
+    success = -1; 
     goto cleanup; 
   }
 
@@ -53,6 +58,7 @@ void signal_handler(int signum) {
   success = gettimeofday(&t1, NULL);
   if (success == -1) {
     printf("error starting time measurements: %s\n", strerror(errno));
+    ret_val = errno;
     goto cleanup; 
   }
   
@@ -62,6 +68,8 @@ void signal_handler(int signum) {
 
   if (arr == MAP_FAILED) {
     printf("error mmapping the file: %s\n", strerror(errno));
+    ret_val = errno;
+    success = -1; 
     goto cleanup; 
   }
 
@@ -84,6 +92,7 @@ void signal_handler(int signum) {
   success = gettimeofday(&t2, NULL);
   if (success == -1) {
     printf("error getting time measurements: %s\n", strerror(errno));
+    ret_val = errno;
     goto cleanup;  
   }
   
@@ -94,12 +103,15 @@ void signal_handler(int signum) {
   printf("%d were read in %f microseconds through MMAP\n", i,elapsed_microsec ); 
 
   //if we got here, no error occured
-  ret_val = 0; 
+  ret_val = 0;
+  success = 0; 
  cleanup: 
 
   //restore the SIGTERM signal handler
   if (sigaction (SIGTERM, &old_sigterm_action, NULL) != 0 ){
     printf("signal handle registration failed: %s\n",strerror(errno));
+    success = -1; 
+    ret_val = errno;
   }
  
   //close the file
@@ -109,10 +121,11 @@ void signal_handler(int signum) {
   //delete it
    if (unlink(FILE_PATH) == -1 ) {
     printf("error unlink the file%s: %s\n",FILE_PATH, strerror(errno));
-    exit(-1); 
+    ret_val =0 ;
+    success = -1;
   }
 
-  if (ret_val < 0) {
+  if (success < 0) {
     exit(ret_val); 
   }
   
@@ -133,12 +146,12 @@ int main() {
   //register the handlers
   if (sigaction (SIGUSR1, &sigusr_action, NULL) != 0 ){
     printf("signal handle registration failed: %s\n",strerror(errno));
-    return -1;
+    return errno;
   }
 
   if (sigaction (SIGTERM, &sigterm_action, &old_sigterm_action) != 0 ){
     printf("signal handle registration failed: %s\n",strerror(errno));
-    return -1;
+    return errno;
   }
   
   while (1) {

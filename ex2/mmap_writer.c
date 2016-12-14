@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <limits.h>
 #include <errno.h>
 #include <sys/types.h>
 #include <dirent.h>
@@ -15,8 +16,8 @@
 
 
 int main(int arcg, char* argv[]) {
-  int FILESIZE = atoi(argv[1]);
-  int RPID = atoi(argv[2]);
+  int FILESIZE = 0; 
+  int RPID =  0 ; 
   char* arr = NULL;
   int fd = -1; 
   int success = 0;
@@ -28,6 +29,22 @@ int main(int arcg, char* argv[]) {
   struct sigaction old_sigterm_action;
 
 
+  FILESIZE = strtol(argv[1], NULL, 10);
+  if (FILESIZE == LONG_MIN || FILESIZE == LONG_MAX) {
+    printf("error converting first parameter to number %s\n",strerror(errno));
+    ret_val = errno; 
+    goto cleanup;
+  }
+
+  
+  RPID = strtol(argv[2], NULL, 10);
+  if (RPID == LONG_MIN || RPID == LONG_MAX) {
+    printf("error converting first parameter to number %s\n",strerror(errno));
+    ret_val = errno; 
+    goto cleanup;
+  }
+
+  
   //assign pointer to our handler functions
   sigterm_action.sa_handler = SIG_IGN;
 
@@ -37,6 +54,7 @@ int main(int arcg, char* argv[]) {
   //register the signal handler
   if (sigaction (SIGTERM, &sigterm_action, &old_sigterm_action) != 0) {
     printf("signal handle registration failed %s\n",strerror(errno));
+    ret_val = errno; 
     goto cleanup;
   }
   
@@ -44,12 +62,14 @@ int main(int arcg, char* argv[]) {
   fd = open(FILE_PATH, O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
   if (fd < 0 ){
       printf( "error opening %s: %s\n", FILE_PATH, strerror(errno));
+      ret_val = errno; 
       goto cleanup;
    }
 
   //change the file permissions
    if (chmod(FILE_PATH, S_IRUSR | S_IWUSR) < 0 ) {
      printf( "error setting file permissions: %s\n", strerror(errno));
+     ret_val = errno;
      goto cleanup;
    }
 
@@ -58,6 +78,7 @@ int main(int arcg, char* argv[]) {
   success = lseek(fd, FILESIZE-1, SEEK_SET);
   if (success == -1) {
     printf("error calling lseek() to 'stretch' the file: %s\n", strerror(errno));
+    ret_val = errno;
     goto cleanup; 
   }
 
@@ -67,6 +88,7 @@ int main(int arcg, char* argv[]) {
   success = write(fd, "", 1);
   if (success != 1) {
     printf("error writing last byte of the file: %s\n", strerror(errno));
+    ret_val = errno;
     goto cleanup; 
   }
 
@@ -76,6 +98,7 @@ int main(int arcg, char* argv[]) {
 
   if (arr == MAP_FAILED) {
     printf("error mmapping the file: %s\n", strerror(errno));
+    ret_val = errno;
     goto cleanup; 
   }
 
@@ -83,6 +106,7 @@ int main(int arcg, char* argv[]) {
   success = gettimeofday(&t1, NULL);
   if (success == -1) {
     printf("error starting time measurements: %s\n", strerror(errno));
+    ret_val = errno;
     goto cleanup; 
   }
 
@@ -95,12 +119,14 @@ int main(int arcg, char* argv[]) {
   success = kill(RPID, SIGUSR1);
   if (success == -1) {
     printf("error sending signal to the reader process: %s\n", strerror(errno));
+    ret_val = errno;
     goto cleanup;
   }
 
   success = gettimeofday(&t2, NULL);
   if (success == -1) {
     printf("error getting time measurements: %s\n", strerror(errno));
+    ret_val = errno;
     goto cleanup;
   }
   
@@ -114,6 +140,7 @@ int main(int arcg, char* argv[]) {
   //unnmap
   if (munmap(arr, FILESIZE) == -1 ) {
     printf("error un-mmapping the file: %s\n", strerror(errno));
+    ret_val = errno;
     goto cleanup;
   }
 

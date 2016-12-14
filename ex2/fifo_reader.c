@@ -25,10 +25,10 @@ int main(){
   int total =0 ;
   char* path = FILE_PATH;
   int i =0; 
-  int ret_val = 0; 
+  int ret_val = -1; 
   struct sigaction sigint_action; 
-  struct sigaction old_sigint_action;
-
+  struct sigaction old_sigint_action; 
+  
   //assign pointer to our handler functions
   sigint_action.sa_handler = SIG_IGN; 
 
@@ -37,6 +37,7 @@ int main(){
 
   if (sigaction (SIGINT, &sigint_action, &old_sigint_action) != 0) {
     printf("signal handle registration failed %s\n",strerror(errno));
+    ret_val = errno; 
     goto cleanup;
   }
 
@@ -45,6 +46,7 @@ int main(){
   fd = open(path, O_RDONLY);
   if (fd < 0 ) {
     printf( "error opening %s: %s\n", path, strerror(errno));
+    ret_val = errno;
     goto cleanup;
   }
   
@@ -53,6 +55,7 @@ int main(){
   success = gettimeofday(&t1, NULL);
   if (success == -1) {
     printf("error starting time measurements: %s\n", strerror(errno));
+    ret_val = errno;
     goto cleanup;
   }
 
@@ -60,14 +63,13 @@ int main(){
     bytes_read = read(fd, buffer, sizeof(buffer));
     if (bytes_read < 0) {
       printf("error reading from file: %s\n", strerror(errno));
+      ret_val = errno;
       goto cleanup;
     }
 
     //count the 'a' chars
     for (i=0; i<bytes_read; i++){
-
-      if (total > 2000) exit(-1); 
-
+      
       if (buffer[i] == 'a') {
 	total++; 
       }
@@ -79,6 +81,7 @@ int main(){
   success = gettimeofday(&t2, NULL);
   if (success == -1) {
     printf("Error getting time measurements: %s\n", strerror(errno));
+    ret_val = errno;
     goto cleanup;
   }
 
@@ -95,6 +98,7 @@ int main(){
  cleanup:
   if (sigaction (SIGINT, &old_sigint_action, NULL) != 0) {
     printf("failed restoring the SIGINT signal handler: %s\n",strerror(errno));
+    ret_val = errno; 
   }
   
   if (fd >= 0) {
