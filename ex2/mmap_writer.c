@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <limits.h>
 #include <errno.h>
 #include <sys/types.h>
 #include <dirent.h>
@@ -29,16 +28,18 @@ int main(int arcg, char* argv[]) {
   struct sigaction old_sigterm_action;
 
 
+  errno = 0; 
   FILESIZE = strtol(argv[1], NULL, 10);
-  if (FILESIZE == LONG_MIN || FILESIZE == LONG_MAX) {
+  if (errno != 0) {
     printf("error converting first parameter to number %s\n",strerror(errno));
     ret_val = errno; 
     goto cleanup;
   }
 
-  
+
+  errno = 0; 
   RPID = strtol(argv[2], NULL, 10);
-  if (RPID == LONG_MIN || RPID == LONG_MAX) {
+  if (errno != 0) {
     printf("error converting first parameter to number %s\n",strerror(errno));
     ret_val = errno; 
     goto cleanup;

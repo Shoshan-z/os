@@ -101,7 +101,7 @@ int write_num_chars_to_file(int fd, int num, int* error_code) {
 
 
 int main(int argc, char* argv[]){
-  int num =  0; //atoi(argv[1]);
+  int num =  0; 
   char* path = FILE_PATH;
   int fd = 0; 
   int success = 0;
@@ -113,8 +113,9 @@ int main(int argc, char* argv[]){
   struct sigaction old_sigint_action;
 
 
+  errno = 0; 
   num = strtol(argv[1], NULL, 10);
-  if (num == LONG_MIN || num == LONG_MAX) {
+  if (errno != 0) {
     printf("error converting first parameter to number %s\n",strerror(errno));
     ret_val = errno; 
     goto cleanup;
@@ -171,9 +172,8 @@ int main(int argc, char* argv[]){
 
   }
   
-  
   //open, write only
-  fd = open(path, O_WRONLY);
+  fd = open(path, O_WRONLY, O_APPEND);
   if (fd < 0 ) {
     printf( "error opening %s: %s\n", path, strerror(errno));
     ret_val = errno; 
