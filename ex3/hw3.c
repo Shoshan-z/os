@@ -6,7 +6,16 @@
 #include <sys/time.h>
 #include <pthread.h>
 
+#define MAX_READER_THREADS 1000 
+#define MAX_WRITER_THREADS 100
+//in the forum it was said that RNUM,WNUM<1000
 
+//global
+int stop_readers = 0; 
+int stop_writers = 0; 
+int stop_gc = 0; 
+
+/*****************************INTLIST FUNCTIONS******************/
 struct list_node{
   int data;
   struct list_node* prev;
@@ -97,7 +106,13 @@ void intlist_destroy(intlist* list){
   if (rc != 0) {
     printf("error in pthread_mutex_destroy(): %s\n", strerror(rc));
    }
-
+  
+  rc =  pthread_cond_destroy(&list->empty_list);
+  //in case of error, print it and continue freeing resources
+  if (rc != 0) {
+    printf("error in pthread_cond_destroy(): %s\n", strerror(rc));
+   }
+  
   if (list->size == 0){
     free(list); 
     return;
@@ -159,11 +174,8 @@ void intlist_push_head(intlist* list, int value){
     list->head = new_node;
     list->tail = new_node;
     list->size++;
-    rc = pthread_cond_signal(&list->empty_list);
-    if (rc != 0) {
-      printf("error in pthread_cond_signal(): %s\n", strerror(rc));
-      exit(rc); 
-    }
+    
+    
   }
   else {
     list->head->prev = new_node; 
@@ -171,7 +183,12 @@ void intlist_push_head(intlist* list, int value){
     list->head = new_node;
     list->size++; 
   }
-  
+
+  rc = pthread_cond_signal(&list->empty_list);
+  if (rc != 0) {
+      printf("error in pthread_cond_signal(): %s\n", strerror(rc));
+      exit(rc); 
+    }
   rc = pthread_mutex_unlock(lock_p);
   if (rc != 0) {
     printf("error in pthread_mutex_lock(): %s\n", strerror(rc));
@@ -260,6 +277,10 @@ void intlist_remove_last_k(intlist* list, int k) {
     exit(EXIT_FAILURE); 
   }
 
+  if (k<=0) {
+    return; 
+  }
+
   lock_p = &list->lock; 
   
   rc = pthread_mutex_lock(lock_p);
@@ -292,7 +313,7 @@ int intlist_size(intlist* list){
   return list->size; 
 }
 
-/*************END OF INTLIST FUNCTIONS*********************************/
+/*********************SIMULATOR FUNCTIONS*********************************/
 
 //information for the writer and gc threads
 typedef struct threads_args{
@@ -313,28 +334,39 @@ void* writer(void* t) {
   
   srand(time(NULL));
   
-  while (1) {  
+  while (stop_writers != 1) {  
     rand_num = rand();
     intlist_push_head(list, rand_num); 
-  }
-
-  //if there are more then MAX items - signal the garbage collector
-  if (intlist_size(list) > max_items) {
-    rc = pthread_cond_signal(reached_max);
-    if (rc != 0) {
-      printf("error in pthread_cond_signal(): %s\n", strerror(rc));
-      exit(rc); 
+   
+    //if there are more then MAX items - signal the garbage collector
+    if (intlist_size(list) > max_items) {
+      rc = pthread_cond_signal(reached_max);
+      if (rc != 0) {
+    	printf("error in pthread_cond_signal(): %s\n", strerror(rc));
+    	exit(rc); 
+      }
     }
-
   } 
 }
 
 void* reader(void* t){
   threads_args* context_args = (threads_args*) t; 
   intlist* list = context_args->list;
+  int max_items = context_args->max; 
+  pthread_cond_t* reached_max = context_args->reached_max;
+  int rc = 0; 
   
-  while (1) {
-    intlist_pop_tail(list); 
+  while (stop_readers != 1) {
+    intlist_pop_tail(list);
+
+    //if there are more then MAX items - signal the garbage collector
+    if (intlist_size(list) > max_items) {
+      rc = pthread_cond_signal(reached_max);
+      if (rc != 0) {
+	printf("error in pthread_cond_signal(): %s\n", strerror(rc));
+	exit(rc); 
+      }
+    }
   }
 }
 
@@ -348,10 +380,8 @@ void* garbage_collector(void *t) {
   int rc = 0;
   int items_to_remove = 0; 
   int size = 0; 
-  
 
-  while (1) {
-
+  while (stop_gc != 1) {
     rc = pthread_mutex_lock(lock);
     if (rc != 0) {
       printf("error in pthread_mutex_lock(): %s\n", strerror(rc));
@@ -365,21 +395,23 @@ void* garbage_collector(void *t) {
     }
 
     size = intlist_size(list); 
+    
     if (size >= max_items) {
       items_to_remove = size/2 + size%2; 
       intlist_remove_last_k(list, items_to_remove);   
     }
-
+    
     rc = pthread_mutex_unlock(lock);
     if (rc != 0) {
       printf("error in pthread_mutex_lock(): %s\n", strerror(rc));
       exit(rc); 
     }
 
-    printf("GC – %d items removed from the list\n", items_to_remove); 
-    
+    printf("GC – %d items removed from the list\n", items_to_remove);
   }
 }
+
+/***************************UTILITY FUNCTIONS***************************/ 
 
 void parse_cmd_arguments(char** argv, int* WNUM_p, int* RNUM_p, int* MAX_p, int* TIME_p) {
 
@@ -398,14 +430,14 @@ void parse_cmd_arguments(char** argv, int* WNUM_p, int* RNUM_p, int* MAX_p, int*
   }
   
   errno = 0; 
-  *MAX_p = strtol(argv[2], NULL, 10);
+  *MAX_p = strtol(argv[3], NULL, 10);
   if (errno != 0) {
     printf("error converting MAX parameter to int: %s\n",strerror(errno));
     exit(errno); 
   }
   
   errno = 0; 
-  *TIME_p = strtol(argv[2], NULL, 10);
+  *TIME_p = strtol(argv[4], NULL, 10);
   if (errno != 0) {
     printf("error converting TIME parameter to int: %s\n",strerror(errno));
     exit(errno); 
@@ -422,37 +454,14 @@ void init_args(threads_args* args_p, intlist* list, pthread_mutex_t* lock, pthre
   args_p->max = MAX; 
 }
 
-//test function
-void* push_head_to_list(void* t){
-  intlist* list = (intlist*) t;
-
-  for (int i=0; i<2; i++) {
-    printf("size before push head %d\n", list->size); 
-    intlist_push_head(list, 1);
-  }
-
-  printf("finishing - push head thread, size %d\n", list->size); 
- 
-}
-
-//test function
-void* remove_tail_from_list(void* t) {
-  intlist* list = (intlist*) t;
-  printf("size before pop tail %d\n", list->size); 
-  intlist_pop_tail(list); 
-  printf("size after pop tail %d\n", list->size);
-
-  printf("finishing - pop tail thread, size %d\n", list->size); 
-
-}
-
 
 int main(int argc, char* argv[]){
   pthread_mutex_t gc_lock;
   pthread_cond_t reached_max;
-
+  pthread_t reader_threads[MAX_READER_THREADS];
+  pthread_t writer_threads[MAX_WRITER_THREADS];
+  pthread_t gc_thread; 
   intlist* list = NULL;
-  pthread_t thread[2];
   void* status; 
   int rc = 0; 
   threads_args context_args; 
@@ -460,15 +469,22 @@ int main(int argc, char* argv[]){
   int WNUM = 0;
   int RNUM = 0;
   int TIME = 0; 
+  int i = 0;
+  int final_list_size = 0; 
+  
+  if (argc != 5) {
+    printf("usage: %s <MAX> <WNUM> <RNUM> <TIME>\n", argv[0]);
+    exit(EXIT_FAILURE); 
+  }
   
   //get cmd arguments
-  parse_cmd_arguments(argv, &MAX, &WNUM, &RNUM, &TIME); 
-
+  parse_cmd_arguments(argv, &MAX, &WNUM, &RNUM, &TIME);
+  
   //create and initialize the list
   list = (intlist*) malloc(sizeof(intlist));
   if (list == NULL) {
     printf("error in malloc: %s\n", strerror(errno)); 
-    goto cleanup; 
+    exit(errno); 
   }
 
   intlist_init(list);
@@ -477,54 +493,95 @@ int main(int argc, char* argv[]){
   rc = pthread_mutex_init(&gc_lock, NULL);
   if (rc != 0) {
     printf("error in pthread_mutex_init(): %s\n", strerror(rc));
-    exit(rc); //goto cleanup instead?  
+    exit(rc); 
    }
 
   //prepare the thread args struct
   init_args(&context_args, list, &gc_lock, &reached_max, MAX);  
 
-  //continue from stage 3 in the guidlines
-
-
-  /**********************test*************************************/ 
-  rc = pthread_create(&thread[0], NULL, push_head_to_list, (void *)list); 
-  if (rc) {
+  //create the gc thread
+  rc = pthread_create(&gc_thread, NULL, garbage_collector, (void*) &context_args); 
+  if (rc != 0) {
     printf("error in pthread_create(): %s\n", strerror(rc));
     exit(rc);
    }
 
-  rc = pthread_create(&thread[1], NULL, remove_tail_from_list,(void *)list); 
-  if (rc) {
-    printf("error in pthread_create(): %s\n", strerror(rc));
-    exit(rc);
+  //create writers threads
+  for (i=0; i<WNUM; ++i){
+      rc = pthread_create(&writer_threads[i], NULL, writer, (void*) &context_args); 
+      if (rc != 0) {
+	printf("error in pthread_create(): %s\n", strerror(rc));
+	exit(rc);
+      }
+  }
+     
+  //create readers threads
+  for (i=0; i<RNUM; ++i){
+      rc = pthread_create(&reader_threads[i], NULL, reader, (void*) &context_args); 
+      if (rc != 0) {
+	printf("error in pthread_create(): %s\n", strerror(rc));
+	exit(rc);
+      }
+  }
+
+  sleep(TIME);
+
+  //signal the reader threads to stop
+  stop_readers = 1;
+  for (i=0; i<RNUM; ++i){
+    rc = pthread_join(reader_threads[i], &status); 
+    if (rc !=0 ){
+      printf("error in pthread_join(): %s\n", strerror(rc));
+      exit(rc); 
+    }
+  }
+
+  //signal the writer threads to stop
+  stop_writers = 1;
+  for (i=1; i<WNUM; ++i){
+    rc = pthread_join(writer_threads[i], &status); 
+    if (rc !=0 ){
+      printf("error in pthread_join(): %s\n", strerror(rc));
+      exit(rc); 
+    }
+  }
+
+  //signal the gc
+  stop_gc = 1;
+  rc = pthread_cond_signal(&reached_max);
+  if (rc != 0) {
+    printf("error in pthread_cond_signal(): %s\n", strerror(rc));
+    exit(rc); 
+  }
+
+  rc = pthread_join(gc_thread, &status); 
+  if (rc !=0 ){
+    printf("error in pthread_join(): %s\n", strerror(rc));
+    exit(rc); 
+  }
+
+  final_list_size = intlist_size(list); 
+  printf("list size: %d\n", final_list_size);
+
+  for (i=0; i<final_list_size; ++i){
+    //while (list != NULL) {
+    printf("%d\n", intlist_pop_tail(list)); 
+  }
+  printf("\n"); 
+  
+  //cleanup
+  intlist_destroy(list); 
+
+  rc =  pthread_mutex_destroy(&gc_lock);
+  //in case of error, print it and continue freeing resources
+  if (rc != 0) {
+    printf("error in pthread_mutex_destroy(): %s\n", strerror(rc));
    }
   
-  rc = pthread_join(thread[0], &status);
-  if (rc) {
-    printf("error in pthread_join(): %s\n", strerror(rc));
-    exit(rc);
-  }
-
-  rc = pthread_join(thread[1], &status);
-  if (rc) {
-    printf("error in pthread_join(): %s\n", strerror(rc));
-    exit(rc);
-  }
-  
-  //test loop, delete later
-   int i =0; 
-  for (i =0; i<10; ++i) {
-    intlist_push_head(list, i); 
-  }
-
-  intlist_remove_last_k(list, 7); 
-
-  printf("size %d\n", list->size);
-  
-  intlist_destroy(list);
-  
-
- cleanup:
+  rc =  pthread_cond_destroy(&reached_max);
+  if (rc != 0) {
+    printf("error in pthread_cond_destroy(): %s\n", strerror(rc));
+   }
   
   return 0;
 
