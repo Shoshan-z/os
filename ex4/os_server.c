@@ -13,10 +13,7 @@
 
 
 /*
- 1. didn't check the conditions for the keyfile
-2. it seems that it isn't being overridden each time
-3. if the size I give is to big, it doesn't work (20,000 doesn't work)
-
+ didn't check the conditions for the keyfile
  */
 
 
@@ -41,7 +38,7 @@ int read_all_from_file(int fd, char* buffer, int size){
   int total = 0; 
   int read_bytes =0; 
   
-  while (total < size && read > 0) {
+   do {
     read_bytes = read(fd, buffer+total, size-total);
     if (read_bytes < 0) {
       printf("error reading from file: %s\n", strerror(errno));
@@ -49,7 +46,9 @@ int read_all_from_file(int fd, char* buffer, int size){
     }
     total += read_bytes;
   }
-  return total; 
+   while (total < size && read_bytes > 0);
+
+    return total; 
 }
 
 void init_key_file(char* key_path, int key_len){
@@ -58,6 +57,7 @@ void init_key_file(char* key_path, int key_len){
   char buffer[BUFF_SIZE] = {0}; 
   int bytes_read = 0;
   int bytes_written = 0; 
+  int bytes_left =0; 
   
   key_fd = open(key_path, O_RDWR | O_CREAT | O_TRUNC, S_IRWXU |S_IRWXG | S_IROTH); 
   if (key_fd < 0 ){
@@ -74,8 +74,10 @@ void init_key_file(char* key_path, int key_len){
   while (bytes_read < key_len) {
 
     if (bytes_read + sizeof(buffer) > key_len) {
-      bytes_read += read_all_from_file(random_fd, buffer, key_len-bytes_read);
-      bytes_written += write_all_to_file(key_fd, buffer, bytes_read); 
+     
+      bytes_left = key_len - bytes_read; //number of bytes left to read/write
+      bytes_read += read_all_from_file(random_fd, buffer, bytes_left);
+      bytes_written += write_all_to_file(key_fd, buffer, bytes_left); 
     }
 
     else {
