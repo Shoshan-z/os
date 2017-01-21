@@ -14,7 +14,7 @@
 
 
 #define URANDOM_PATH "/dev/urandom"
-#define BUFF_SIZE 4096
+#define BUFF_SIZE 5
 
 
 /*
@@ -26,6 +26,24 @@
 //global variables
 int done = 0; 
 int clients_cnt = 0; //delete afterwards
+
+
+int read_all_from_file(int fd, char* buffer, int size){
+  int total = 0; 
+  int read_bytes =0; 
+  
+   do {
+    read_bytes = read(fd, buffer+total, size-total);
+    if (read_bytes < 0) {
+      printf("error reading from file: %s\n", strerror(errno));
+      exit(errno); 
+    }
+    total += read_bytes;
+  }
+   while (total < size && read_bytes > 0);
+
+   return total; 
+}
 
 int write_all_to_file(int fd, char* buffer, int size){
   int total = 0; 
@@ -43,23 +61,28 @@ int write_all_to_file(int fd, char* buffer, int size){
   return total; 
 }
 
-
-int read_all_from_file(int fd, char* buffer, int size){
-  int total = 0; 
-  int read_bytes =0; 
-  
-   do {
-    read_bytes = read(fd, buffer+total, size-total);
-    if (read_bytes < 0) {
-      printf("error reading from file: %s\n", strerror(errno));
-      exit(errno); 
-    }
-    total += read_bytes;
-  }
-   while (total < size && read_bytes > 0);
-
-    return total; 
+void send_with_size(int connfd, char* buffer, int size){
+	
+	write_all_to_file(connfd, (char*) &size, sizeof(size)); 
+	
+	if (size != 0) {
+		write_all_to_file(connfd, buffer, size); 
+	}
 }
+
+//recive the message size, recive the message and return the size
+int recv_with_size(int connfd, char* buffer){
+	int size = 0; 
+	
+	read_all_from_file(connfd, (char*) &size, sizeof(size)); 
+	
+	if (size != 0) {
+		read_all_from_file(connfd, buffer, size);
+	}
+
+	return size; 
+}
+
 
 void init_key_file(char* key_path, int key_len){
   int key_fd = 0; 
@@ -133,24 +156,16 @@ void sigint_handler (int signum)
 void handle_client(int connfd) {
 	char buffer[BUFF_SIZE] = {0}; 
 	int read_bytes = 0; 
-	int sent_bytes = 0; 
+	//int sent_bytes = 0; 
 	
 	clients_cnt++; 
   printf("handling client %d\n", clients_cnt);   
 	
-	
-	//while not done? 
-	
 	do {
-		//(int fd, char* buffer, int size
-		read_bytes = read_all_from_file(connfd, buffer, sizeof(buffer)); 
+		read_bytes = recv_with_size(connfd, buffer); 
+		send_with_size(connfd, buffer, read_bytes); 
 		
-		if (read_bytes !=0) {
-			sent_bytes = write_all_to_file(connfd, buffer, sizeof(buffer)); 
-		}
-		
-	} while (read_bytes !=0 ); 
-	
+	}while (read_bytes != 0); 
 	
 }
 
@@ -158,13 +173,13 @@ int main(int argc, char* argv[]){
   short port = 0;
   char* key_path = NULL;
   int key_len = 0; 
-  int success = 0; 
+  //int success = 0; 
   struct sockaddr_in serv_addr = {0};
-  struct sockaddr_in my_addr = {0};  //check if i need this 
-  struct sockaddr_in peer_addr = {0}; //check if i need this
+  //struct sockaddr_in my_addr = {0};  //check if i need this 
+  //struct sockaddr_in peer_addr = {0}; //check if i need this
   int listenfd = 0, connfd = 0;
   struct sigaction sigint_action;
-  int f = 0; 
+  //int f = 0; 
   
   if (argc < 3 || argc > 4) {
     printf("usage: %s <PORT> <KEY> [KEYLEN]\n", argv[0]); 
@@ -212,35 +227,36 @@ int main(int argc, char* argv[]){
   
   while (!done) {
 	    
-		socklen_t addrsize = sizeof(struct sockaddr_in );
+		//socklen_t addrsize = sizeof(struct sockaddr_in );
 
      /* accpeting connection. can use NULL in 2nd and 3rd arguments
     but we want to print the client socket details*/
-    connfd = accept(listenfd, (struct sockaddr*)&peer_addr, &addrsize);
-
+    connfd = accept(listenfd, NULL, NULL);
     if(connfd<0){
 	  printf("error in accept: %s\n", strerror(errno));
       exit(errno); 
 		}
+		handle_client(connfd);
 	
+	/*
 		f = fork();
 		if (f < 0) {
 			printf("fork failed: %s\n", strerror(errno));
 			exit(errno);
 		}
 	
-		if (f=0) { //inside son process
-			close(listenfd);
-			handle_client(connfd); 
+		if (f == 0) { //inside son process
+			//close(listenfd);
+			//handle_client(connfd); 
 			
 		}
 		else { //inside parent process 
-			close(connfd); 
+			//close(connfd); 
 		}
-	  
+	  */
   }
   
- cleanup:
+ //cleanup:
   
   
   
