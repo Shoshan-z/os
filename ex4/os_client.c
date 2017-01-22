@@ -12,7 +12,7 @@
 #include <arpa/inet.h>
 #include <signal.h>
 
-#define BUFF_SIZE 5	
+#define BUFF_SIZE 4096	
 
 
 void parse_args(char* argv[], char** ip, short* port, char** input_path, char** output_path) {
@@ -88,8 +88,8 @@ int recv_with_size(int connfd, char* buffer){
 }
 
 int main(int argc, char* argv[]){
-	int sock_fd =0; 
-	char send_buffer[BUFF_SIZE] = {0}; 
+  int sock_fd =0; 
+        char send_buffer[BUFF_SIZE] = {0};
 	char recv_buffer[BUFF_SIZE] = {0}; 
 	struct sockaddr_in serv_addr = {0}; 
   //struct sockaddr_in my_addr = {0}; //check if needed  
@@ -102,6 +102,7 @@ int main(int argc, char* argv[]){
 	int success = 0; 
 	struct stat input_file_info; 
 	int input_fd = 0;
+	int output_fd = 0;
 	int bytes_read = 0; 
 	
 	if (argc != 5) {
@@ -117,7 +118,7 @@ int main(int argc, char* argv[]){
 		exit(errno);
 	}
 	
-	serv_addr.sin_family = AF_INET;
+  serv_addr.sin_family = AF_INET;
   serv_addr.sin_port = htons(port); 
   serv_addr.sin_addr.s_addr = inet_addr(ip); 
 	
@@ -133,39 +134,40 @@ int main(int argc, char* argv[]){
       exit(errno); 
     }
     else { //the file doesn't exist
-			printf("IN file doesn't exist: %s\n", strerror(errno)); 
-			exit(errno); 
-		}
-	}
+      printf("IN file doesn't exist: %s\n", strerror(errno)); 
+      exit(errno); 
+    }
+ }
 	
-	//open the input file, read only
+  //open the input file, read only
   input_fd = open(input_path, O_RDONLY); 
   if (input_fd < 0 ){
-		printf( "error opening %s: %s\n", input_path, strerror(errno));
+    printf( "error opening %s: %s\n", input_path, strerror(errno));
     exit(errno);
   }
+
+  output_fd = open(output_path, O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU |S_IRWXG | S_IROTH); //open file for writing, create it if not exist
+    if (output_fd <0 ){
+      printf( "error opening %s: %s\n", output_path, strerror(errno));
+      exit(errno); 
+    }
+  
 	
-	do {
-		bytes_read = read_all_from_file(input_fd, send_buffer, sizeof(send_buffer)); 
-		send_with_size(sock_fd, send_buffer, bytes_read); 
-		recv_with_size(sock_fd, recv_buffer); 
-		
-		if (bytes_read > 0) {
-			 printf("%s", recv_buffer);
-		}
-	} while (bytes_read > 0);  
-	
-	//test - connecting to a socket, sending a test message and receiving it back
-	/*
-	int a = 0; 
-	send_with_size(sock_fd, test, 20); 
-	write_all_to_file(sock_fd, (char* ) &a, sizeof(&a));  
-	recv_with_size(sock_fd, recv_buffer); 
-	
-	printf("%s\n", recv_buffer); 
-	*/
+  do {
+    bytes_read = read_all_from_file(input_fd, send_buffer, sizeof(send_buffer)); 
+    send_with_size(sock_fd, send_buffer, bytes_read); 
+
+    if (bytes_read > 0) {
+      recv_with_size(sock_fd, recv_buffer); 
+      write_all_to_file(output_fd, recv_buffer, bytes_read); 
+      }
+    } while (bytes_read > 0);  
 
 
-	return 0; 
+  close(input_fd);
+  close(output_fd);
+  close(sock_fd); 
+
+  return 0; 
 	
 }
