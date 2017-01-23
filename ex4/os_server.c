@@ -16,11 +16,6 @@
 #define URANDOM_PATH "/dev/urandom"
 #define BUFF_SIZE 4096
 
-//open issues:
-//1. error in accpet - the sigint interrupt it in the middle - is that ok?
-//2. when the son process finishes- is it ok to exit? should I wait?
-//3. check a bit deeper (consult lilach)
-
 //global variables
 int done = 0; 
 
@@ -60,20 +55,22 @@ int write_all_to_file(int fd, char* buffer, int size){
 }
 
 void send_with_size(int connfd, char* buffer, int size){
-	
-	write_all_to_file(connfd, (char*) &size, sizeof(size)); 
-	
-	if (size != 0) {
-		write_all_to_file(connfd, buffer, size); 
-	}
+  int network_size = htonl(size); 
+
+  write_all_to_file(connfd, (char*) &network_size, sizeof(network_size)); 	
+  if (size != 0) {
+    write_all_to_file(connfd, buffer, size); 
+   }
 }
 
 //recive the message size, recive the message and return the size
 int recv_with_size(int connfd, char* buffer){
+  int network_size = 0; 
   int size = 0; 
 	
-  read_all_from_file(connfd, (char*) &size, sizeof(size)); 
-	
+  read_all_from_file(connfd, (char*) &network_size, sizeof(network_size)); 
+
+  size = ntohl(network_size); 
    if (size != 0) {
      read_all_from_file(connfd, buffer, size);
    }
@@ -292,8 +289,11 @@ int main(int argc, char* argv[]){
   while (!done) {
 
     //accept a new connection
-    printf("listen fd %d\n", listenfd); 
+    errno = 0; 
     connfd = accept(listenfd, NULL, NULL);
+    if (errno == EINTR) {
+      goto cleanup; 
+    }
     if(connfd<0){
       printf("error in accept: %s\n", strerror(errno));
       exit(errno); 
@@ -314,6 +314,7 @@ int main(int argc, char* argv[]){
     }	  
   }
 
+ cleanup: 
   close(listenfd); 
   
   return 0; 

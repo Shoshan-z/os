@@ -31,6 +31,7 @@ void parse_args(char* argv[], char** ip, short* port, char** input_path, char** 
   
 }
 
+//safe read
 int read_all_from_file(int fd, char* buffer, int size){
   int total = 0; 
   int read_bytes =0; 
@@ -48,7 +49,7 @@ int read_all_from_file(int fd, char* buffer, int size){
     return total; 
 }
 
-
+//safe write
 int write_all_to_file(int fd, char* buffer, int size){
   int total = 0; 
   int written =0; 
@@ -66,26 +67,28 @@ int write_all_to_file(int fd, char* buffer, int size){
 }
 
 void send_with_size(int connfd, char* buffer, int size){
-	
-	write_all_to_file(connfd, (char*) &size, sizeof(size)); 
-	
-	if (size != 0) {
-		write_all_to_file(connfd, buffer, size); 
-	}
+  int network_size = htonl(size); 
+
+  write_all_to_file(connfd, (char*) &network_size, sizeof(network_size)); 	
+  if (size != 0) {
+    write_all_to_file(connfd, buffer, size); 
+   }
 }
 
 //recive the message size, recive the message and return the size
 int recv_with_size(int connfd, char* buffer){
-	int size = 0; 
+  int network_size = 0; 
+  int size = 0; 
 	
-	read_all_from_file(connfd, (char*)&size, sizeof(size)); 
-	
-	if (size != 0) {
-		read_all_from_file(connfd, buffer, size);
-	}
+  read_all_from_file(connfd, (char*) &network_size, sizeof(network_size)); 
 
-	return size; 
+  size = ntohl(network_size); 
+   if (size != 0) {
+     read_all_from_file(connfd, buffer, size);
+   }
+   return size; 
 }
+
 
 int main(int argc, char* argv[]){
   int sock_fd =0; 
